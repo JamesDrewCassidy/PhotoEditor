@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Drew's Photo Editor</title>
+  <title>Drews Photo Editor</title>
   <style>
     :root {
       --primary-bg: #1f1f1f;
@@ -34,6 +34,27 @@
       font-weight: bold;
       box-shadow: 0 2px 4px rgba(0,0,0,0.5);
       flex-shrink: 0;
+      position: relative;
+    }
+    /* Mobile Sidebar Toggle Button */
+    #toggleSidebarBtn {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: var(--button-bg);
+      border: none;
+      color: var(--text-color);
+      font-size: 24px;
+      padding: 5px 10px;
+      cursor: pointer;
+      display: none;
+    }
+    /* Show toggle on small screens */
+    @media (max-width: 768px) {
+      #toggleSidebarBtn {
+        display: block;
+      }
     }
     #container {
       flex: 1;
@@ -47,6 +68,11 @@
       padding: 10px;
       overflow-y: auto;
       border-right: 2px solid var(--border-color);
+      transition: transform 0.3s ease;
+    }
+    /* Hide sidebar on mobile when collapsed */
+    #sidebar.collapsed {
+      transform: translateX(-100%);
     }
     .tool-group {
       margin-bottom: 15px;
@@ -127,7 +153,7 @@
     }
     #overlayCanvas {
       z-index: 10;
-      pointer-events: none;
+      pointer-events: auto;
     }
     #cropOverlay {
       position: absolute;
@@ -171,30 +197,48 @@
       border-radius: 4px;
       cursor: pointer;
     }
+    /* Responsive adjustments for small screens */
+    @media (max-width: 768px) {
+      #container {
+        flex-direction: column;
+      }
+      #sidebar {
+        width: 100%;
+        height: auto;
+        border-right: none;
+        border-bottom: 2px solid var(--border-color);
+      }
+      #mainArea {
+        flex: 1;
+      }
+    }
   </style>
 </head>
 <body>
-  <header>Ultra-Advanced Image Editor</header>
+  <header>
+    <button id="toggleSidebarBtn" aria-label="Toggle Sidebar">☰</button>
+    Drews Photo Editor
+  </header>
   <div id="container">
     <aside id="sidebar">
       <!-- File Tools -->
       <div class="tool-group">
         <div class="group-header">File</div>
         <div class="group-controls">
-          <input type="file" id="upload" accept="image/*" title="Upload Image" />
-          <button id="resetBtn" title="Reset to original image">Reset</button>
-          <button id="undoBtn" title="Undo last action">Undo</button>
-          <button id="redoBtn" title="Redo last undone action">Redo</button>
+          <input type="file" id="upload" accept="image/*" title="Upload Image" aria-label="Upload Image" />
+          <button id="resetBtn" title="Reset to original image" aria-label="Reset Image">Reset</button>
+          <button id="undoBtn" title="Undo last action" aria-label="Undo">Undo</button>
+          <button id="redoBtn" title="Redo last undone action" aria-label="Redo">Redo</button>
         </div>
       </div>
       <!-- Transform Tools -->
       <div class="tool-group">
         <div class="group-header">Transform</div>
         <div class="group-controls">
-          <button id="rotateLeftBtn" title="Rotate Left">⟲ Rotate Left</button>
-          <button id="rotateRightBtn" title="Rotate Right">⟳ Rotate Right</button>
-          <button id="flipHBtn" title="Flip Horizontal">⇋ Flip H</button>
-          <button id="flipVBtn" title="Flip Vertical">⇅ Flip V</button>
+          <button id="rotateLeftBtn" title="Rotate Left" aria-label="Rotate Left">⟲ Rotate Left</button>
+          <button id="rotateRightBtn" title="Rotate Right" aria-label="Rotate Right">⟳ Rotate Right</button>
+          <button id="flipHBtn" title="Flip Horizontal" aria-label="Flip Horizontal">⇋ Flip H</button>
+          <button id="flipVBtn" title="Flip Vertical" aria-label="Flip Vertical">⇅ Flip V</button>
           <label>Rotation:
             <input type="range" id="rotationSlider" min="-180" max="180" value="0" />
           </label>
@@ -278,7 +322,9 @@
         <div class="group-controls">
           <button id="aiAutoEnhanceBtn">AI Auto Enhance</button>
           <button id="aiRemoveNoiseBtn">AI Remove Noise</button>
+          <button id="aiColorCorrectBtn">AI Color Correct</button>
           <button id="aiStyleTransferBtn">AI Style Transfer</button>
+          <button id="aiFaceRetouchBtn">AI Face Retouch</button>
         </div>
       </div>
       <!-- Export -->
@@ -309,7 +355,7 @@
   <script>
     window.onload = function() {
       /*******************
-       * Editor State
+       * Editor State & Elements
        *******************/
       const editor = {
         originalImage: null,
@@ -328,15 +374,12 @@
         draggingText: null,
         dragOffset: { x: 0, y: 0 },
         textPosition: { x: 0, y: 0 },
-        // For shape drawing
         currentTool: null, // "rectangle", "circle", "line"
         isDrawingShape: false,
         shapeStart: { x: 0, y: 0 }
       };
 
-      /*******************
-       * Canvas Elements
-       *******************/
+      // Canvas elements
       const baseCanvas = document.getElementById('baseCanvas');
       const baseCtx = baseCanvas.getContext('2d');
       const overlayCanvas = document.getElementById('overlayCanvas');
@@ -345,6 +388,15 @@
       const canvasContainer = document.getElementById('canvasContainer');
       const textModal = document.getElementById('textModal');
       const modalTextInput = document.getElementById('modalTextInput');
+      const sidebar = document.getElementById('sidebar');
+      const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+
+      /*******************
+       * Responsive Sidebar Toggle
+       *******************/
+      toggleSidebarBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+      });
 
       /*******************
        * Utility Functions
@@ -367,7 +419,7 @@
         baseCtx.drawImage(img, 0, 0, baseCanvas.width, baseCanvas.height);
       }
 
-      // Draw shapes first, then text
+      // Draw shapes and then text
       function redrawOverlay() {
         overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         editor.shapes.forEach(shape => {
@@ -680,7 +732,7 @@
       /*******************
        * AI Tools
        *******************/
-      // AI Auto Enhance: Simple histogram stretch per channel
+      // AI Auto Enhance: Histogram stretching
       function aiAutoEnhance() {
         if (!editor.originalImage) return;
         const width = baseCanvas.width;
@@ -705,26 +757,99 @@
         saveState();
       }
       document.getElementById('aiAutoEnhanceBtn').addEventListener('click', aiAutoEnhance);
-      // Placeholder for AI Remove Noise
-      document.getElementById('aiRemoveNoiseBtn').addEventListener('click', function() {
-        alert('AI Remove Noise is under development.');
-      });
-      // Placeholder for AI Style Transfer
+
+      // AI Remove Noise: 3x3 median filter
+      function aiRemoveNoise() {
+        if (!editor.originalImage) return;
+        const width = baseCanvas.width;
+        const height = baseCanvas.height;
+        const imageData = baseCtx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        const output = new Uint8ClampedArray(data.length);
+        const windowSize = 3;
+        const half = Math.floor(windowSize / 2);
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            let rArr = [], gArr = [], bArr = [];
+            for (let dy = -half; dy <= half; dy++) {
+              for (let dx = -half; dx <= half; dx++) {
+                const nx = Math.min(width - 1, Math.max(0, x + dx));
+                const ny = Math.min(height - 1, Math.max(0, y + dy));
+                const index = (ny * width + nx) * 4;
+                rArr.push(data[index]);
+                gArr.push(data[index+1]);
+                bArr.push(data[index+2]);
+              }
+            }
+            rArr.sort((a, b) => a - b);
+            gArr.sort((a, b) => a - b);
+            bArr.sort((a, b) => a - b);
+            const medianIndex = Math.floor(rArr.length / 2);
+            const idx = (y * width + x) * 4;
+            output[idx] = rArr[medianIndex];
+            output[idx+1] = gArr[medianIndex];
+            output[idx+2] = bArr[medianIndex];
+            output[idx+3] = data[idx+3];
+          }
+        }
+        for (let i = 0; i < data.length; i++) {
+          data[i] = output[i];
+        }
+        baseCtx.putImageData(imageData, 0, 0);
+        saveState();
+      }
+      document.getElementById('aiRemoveNoiseBtn').addEventListener('click', aiRemoveNoise);
+
+      // AI Color Correction: Basic white balance adjustment
+      function aiColorCorrect() {
+        if (!editor.originalImage) return;
+        const width = baseCanvas.width;
+        const height = baseCanvas.height;
+        const imageData = baseCtx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        let rSum = 0, gSum = 0, bSum = 0;
+        const total = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) {
+          rSum += data[i];
+          gSum += data[i+1];
+          bSum += data[i+2];
+        }
+        const rAvg = rSum / total;
+        const gAvg = gSum / total;
+        const bAvg = bSum / total;
+        const avg = (rAvg + gAvg + bAvg) / 3;
+        const rScale = avg / rAvg;
+        const gScale = avg / gAvg;
+        const bScale = avg / bAvg;
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = Math.min(data[i] * rScale, 255);
+          data[i+1] = Math.min(data[i+1] * gScale, 255);
+          data[i+2] = Math.min(data[i+2] * bScale, 255);
+        }
+        baseCtx.putImageData(imageData, 0, 0);
+        saveState();
+      }
+      document.getElementById('aiColorCorrectBtn').addEventListener('click', aiColorCorrect);
+
+      // AI Style Transfer & AI Face Retouch: Placeholders
       document.getElementById('aiStyleTransferBtn').addEventListener('click', function() {
         alert('AI Style Transfer is under development.');
       });
+      document.getElementById('aiFaceRetouchBtn').addEventListener('click', function() {
+        alert('AI Face Retouch is under development.');
+      });
 
       /*******************
-       * OverlayCanvas Events (Drawing, Shapes, Crop, Drag, Text)
+       * Unified Pointer Event Handling for Canvas (Supports touch & mouse)
        *******************/
-      overlayCanvas.style.pointerEvents = "auto";
-      baseCanvas.style.pointerEvents = "none";
-      overlayCanvas.addEventListener('mousedown', function(e) {
+      function getCanvasCoordinates(e) {
         const rect = overlayCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+      }
+
+      overlayCanvas.addEventListener('pointerdown', function(e) {
+        const {x, y} = getCanvasCoordinates(e);
         if (editor.currentTool) {
-          // Start shape drawing
           editor.isDrawingShape = true;
           editor.shapeStart = { x, y };
         } else if (editor.cropMode) {
@@ -742,7 +867,7 @@
           editor.isDrawing = true;
           editor.lastDrawPos = { x, y };
         } else {
-          // Check if clicking on text for dragging
+          // Check for text dragging
           for (let i = editor.textElements.length - 1; i >= 0; i--) {
             const el = editor.textElements[i];
             overlayCtx.font = `${el.size}px ${el.font}`;
@@ -756,10 +881,9 @@
           }
         }
       });
-      overlayCanvas.addEventListener('mousemove', function(e) {
-        const rect = overlayCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+
+      overlayCanvas.addEventListener('pointermove', function(e) {
+        const {x, y} = getCanvasCoordinates(e);
         if (editor.isDrawingShape) {
           overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
           redrawOverlay();
@@ -800,10 +924,9 @@
           redrawOverlay();
         }
       });
-      overlayCanvas.addEventListener('mouseup', function(e) {
-        const rect = overlayCanvas.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+
+      overlayCanvas.addEventListener('pointerup', function(e) {
+        const {x, y} = getCanvasCoordinates(e);
         if (editor.isDrawingShape) {
           const shape = {
             type: editor.currentTool,
@@ -849,6 +972,12 @@
           editor.draggingText = null;
         }
       });
+      // Ensure pointercancel resets drawing state
+      overlayCanvas.addEventListener('pointercancel', function(e) {
+        editor.isDrawing = false;
+        editor.isDrawingShape = false;
+        editor.draggingText = null;
+      });
 
       /*******************
        * Text Modal Handling
@@ -882,7 +1011,8 @@
        *******************/
       document.getElementById('toggleDrawBtn').addEventListener('click', function() {
         editor.drawMode = !editor.drawMode;
-        overlayCanvas.style.pointerEvents = editor.drawMode ? "auto" : "none";
+        // When drawing mode is active, we let overlayCanvas capture pointer events
+        overlayCanvas.style.pointerEvents = "auto";
         if (editor.drawMode) {
           alert('Drawing mode activated: Draw on the image.');
         }
