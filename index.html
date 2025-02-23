@@ -162,6 +162,9 @@
       border: 2px solid var(--border-color);
       box-shadow: 0 4px 8px rgba(0,0,0,0.3);
       border-radius: 8px;
+      /* The inline width/height are set by JS, but max values ensure it doesn’t exceed viewport */
+      max-width: 100%;
+      max-height: 100%;
     }
     canvas {
       display: block;
@@ -429,6 +432,8 @@
       }).catch(err => console.error('Service Worker registration failed:', err));
     }
 
+    // Global scaleFactor to adjust pointer coordinates
+    let scaleFactor = 1;
     window.onload = function() {
       /*******************
        * Editor State & Elements
@@ -508,16 +513,37 @@
        * Utility Functions
        *******************/
       function resizeCanvases(width, height) {
+        // Determine available width and height based on viewport and layout.
+        let availableWidth, availableHeight;
+        if (window.innerWidth < 768) {
+          availableWidth = window.innerWidth - 20;
+          availableHeight = window.innerHeight - document.querySelector('header').offsetHeight - 20;
+        } else {
+          availableWidth = window.innerWidth - (sidebar.classList.contains('collapsed') ? 0 : 250) - 20;
+          availableHeight = window.innerHeight - document.querySelector('header').offsetHeight - 20;
+        }
+        // Calculate scale factor so the image fits in the available space.
+        scaleFactor = 1;
+        if (width > availableWidth) {
+          scaleFactor = availableWidth / width;
+        }
+        if (height * scaleFactor > availableHeight) {
+          scaleFactor = availableHeight / height;
+        }
+        const displayWidth = width * scaleFactor;
+        const displayHeight = height * scaleFactor;
+        // Set the canvas's internal resolution to the image's actual size
         baseCanvas.width = width;
         baseCanvas.height = height;
         overlayCanvas.width = width;
         overlayCanvas.height = height;
-        baseCanvas.style.width = width + "px";
-        baseCanvas.style.height = height + "px";
-        overlayCanvas.style.width = width + "px";
-        overlayCanvas.style.height = height + "px";
-        canvasContainer.style.width = width + "px";
-        canvasContainer.style.height = height + "px";
+        // And set the displayed size according to the computed scale factor.
+        baseCanvas.style.width = displayWidth + "px";
+        baseCanvas.style.height = displayHeight + "px";
+        overlayCanvas.style.width = displayWidth + "px";
+        overlayCanvas.style.height = displayHeight + "px";
+        canvasContainer.style.width = displayWidth + "px";
+        canvasContainer.style.height = displayHeight + "px";
       }
 
       function redrawBase(img) {
@@ -525,7 +551,7 @@
         baseCtx.drawImage(img, 0, 0, baseCanvas.width, baseCanvas.height);
       }
 
-      // Draw shapes and text
+      // Draw shapes and then text
       function redrawOverlay() {
         overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         editor.shapes.forEach(shape => {
@@ -956,7 +982,8 @@
        *******************/
       function getCanvasCoordinates(e) {
         const rect = overlayCanvas.getBoundingClientRect();
-        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        // Adjust pointer coordinates to the actual canvas coordinate system by factoring in scaleFactor.
+        return { x: (e.clientX - rect.left) / scaleFactor, y: (e.clientY - rect.top) / scaleFactor };
       }
 
       overlayCanvas.addEventListener('pointerdown', function(e) {
