@@ -1,167 +1,937 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Ultra-Advanced Image Editor</title>
   <style>
+    :root {
+      --primary-bg: #1f1f1f;
+      --secondary-bg: #2c2c2c;
+      --accent: #4caf50;
+      --text-color: #fff;
+      --button-bg: #333;
+      --button-hover: #555;
+      --canvas-bg: #fff;
+      --border-color: #444;
+      --sidebar-width: 250px;
+    }
     body {
       margin: 0;
-      font-family: sans-serif;
-      background: #f0f0f0;
-    }
-    #toolbar {
-      background: #333;
-      color: #fff;
-      padding: 10px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: var(--primary-bg);
+      color: var(--text-color);
       display: flex;
-      flex-wrap: wrap;
-      align-items: center;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
     }
-    #toolbar input, #toolbar button {
-      margin: 5px;
-      padding: 5px 10px;
-      border: none;
-      border-radius: 3px;
+    header {
+      background: var(--secondary-bg);
+      padding: 15px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.5);
+      flex-shrink: 0;
+    }
+    #container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    /* Sidebar styling */
+    #sidebar {
+      width: var(--sidebar-width);
+      background: var(--secondary-bg);
+      padding: 10px;
+      overflow-y: auto;
+      border-right: 2px solid var(--border-color);
+    }
+    .tool-group {
+      margin-bottom: 15px;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 10px;
+    }
+    .group-header {
+      font-size: 18px;
+      margin: 5px 0;
       cursor: pointer;
+      user-select: none;
+      padding: 5px;
+      transition: background 0.2s;
     }
-    #toolbar input {
-      background: #fff;
-      color: #333;
+    .group-header:hover {
+      background: var(--button-hover);
     }
-    #toolbar button {
-      background: #555;
-      color: #fff;
+    /* Expand File group by default */
+    .tool-group:first-child .group-controls {
+      display: flex;
     }
-    #toolbar button:hover {
-      background: #777;
+    .group-controls {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 5px;
+    }
+    .group-controls label {
+      display: flex;
+      flex-direction: column;
+      font-size: 14px;
+    }
+    .group-controls input[type="range"],
+    .group-controls input[type="color"],
+    .group-controls input[type="file"],
+    .group-controls select,
+    .group-controls button {
+      margin-top: 3px;
+      padding: 5px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+    }
+    .group-controls button {
+      background: var(--button-bg);
+      color: var(--text-color);
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .group-controls button:hover {
+      background: var(--button-hover);
+    }
+    /* Main area and canvas styling */
+    #mainArea {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: var(--canvas-bg);
+      overflow: auto;
     }
     #canvasContainer {
-      text-align: center;
-      margin: 20px auto;
-      max-width: 90%;
-      border: 2px solid #ccc;
-      background: #fff;
-      padding: 10px;
+      position: relative;
+      background: var(--canvas-bg);
+      border: 2px solid var(--border-color);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      border-radius: 8px;
     }
     canvas {
-      max-width: 100%;
+      display: block;
+      width: 100%;
       height: auto;
+    }
+    #baseCanvas, #overlayCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #overlayCanvas {
+      z-index: 10;
+      pointer-events: none;
+    }
+    #cropOverlay {
+      position: absolute;
+      border: 2px dashed var(--accent);
+      pointer-events: none;
+      z-index: 20;
+      display: none;
+    }
+    /* Modal for text input */
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-content {
+      background: var(--secondary-bg);
+      padding: 20px;
+      border-radius: 8px;
+      width: 300px;
+      text-align: center;
+    }
+    .modal-content input[type="text"] {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
+    .modal-content button {
+      background: var(--accent);
+      color: var(--text-color);
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <div id="toolbar">
-    <input type="file" id="upload" accept="image/*">
-    <button id="resetBtn">Reset</button>
-    <button id="undoBtn">Undo</button>
-    <button id="grayscaleBtn">Grayscale</button>
-    <button id="brightnessBtn">Brightness+</button>
-    <button id="contrastBtn">Contrast+</button>
-    <button id="aiRetouchBtn">AI Retouch (Placeholder)</button>
+  <header>Ultra-Advanced Image Editor</header>
+  <div id="container">
+    <aside id="sidebar">
+      <!-- File Tools -->
+      <div class="tool-group">
+        <div class="group-header">File</div>
+        <div class="group-controls">
+          <input type="file" id="upload" accept="image/*" title="Upload Image" />
+          <button id="resetBtn" title="Reset to original image">Reset</button>
+          <button id="undoBtn" title="Undo last action">Undo</button>
+          <button id="redoBtn" title="Redo last undone action">Redo</button>
+        </div>
+      </div>
+      <!-- Transform Tools -->
+      <div class="tool-group">
+        <div class="group-header">Transform</div>
+        <div class="group-controls">
+          <button id="rotateLeftBtn" title="Rotate Left">⟲ Rotate Left</button>
+          <button id="rotateRightBtn" title="Rotate Right">⟳ Rotate Right</button>
+          <button id="flipHBtn" title="Flip Horizontal">⇋ Flip H</button>
+          <button id="flipVBtn" title="Flip Vertical">⇅ Flip V</button>
+          <label>Rotation:
+            <input type="range" id="rotationSlider" min="-180" max="180" value="0" />
+          </label>
+        </div>
+      </div>
+      <!-- Adjustments -->
+      <div class="tool-group">
+        <div class="group-header">Adjustments</div>
+        <div class="group-controls">
+          <label>Brightness:
+            <input type="range" id="brightnessSlider" min="0" max="200" value="100" />
+          </label>
+          <label>Contrast:
+            <input type="range" id="contrastSlider" min="0" max="200" value="100" />
+          </label>
+          <label>Saturation:
+            <input type="range" id="saturateSlider" min="0" max="200" value="100" />
+          </label>
+          <label>Blur:
+            <input type="range" id="blurSlider" min="0" max="10" value="0" />
+          </label>
+          <label>Hue:
+            <input type="range" id="hueSlider" min="0" max="360" value="0" />
+          </label>
+          <button id="resetAdjustmentsBtn">Reset Adjustments</button>
+        </div>
+      </div>
+      <!-- Filters -->
+      <div class="tool-group">
+        <div class="group-header">Filters</div>
+        <div class="group-controls">
+          <button id="grayscaleBtn">Grayscale</button>
+          <button id="sepiaBtn">Sepia</button>
+          <button id="invertBtn">Invert</button>
+          <button id="blurFilterBtn">Blur Filter</button>
+        </div>
+      </div>
+      <!-- Text -->
+      <div class="tool-group">
+        <div class="group-header">Text</div>
+        <div class="group-controls">
+          <button id="addTextModeBtn">Add Text</button>
+        </div>
+      </div>
+      <!-- Drawing -->
+      <div class="tool-group">
+        <div class="group-header">Drawing</div>
+        <div class="group-controls">
+          <button id="toggleDrawBtn">Toggle Draw</button>
+          <label>Color:
+            <input type="color" id="drawColor" value="#ff0000" />
+          </label>
+          <label>Brush:
+            <input type="range" id="brushSize" min="1" max="20" value="3" />
+          </label>
+          <button id="clearOverlayBtn">Clear Overlays</button>
+        </div>
+      </div>
+      <!-- Shapes -->
+      <div class="tool-group">
+        <div class="group-header">Shapes</div>
+        <div class="group-controls">
+          <button id="rectangleBtn">Rectangle</button>
+          <button id="circleBtn">Circle</button>
+          <button id="lineBtn">Line</button>
+          <button id="clearShapesBtn">Clear Shapes</button>
+        </div>
+      </div>
+      <!-- Effects -->
+      <div class="tool-group">
+        <div class="group-header">Effects</div>
+        <div class="group-controls">
+          <button id="sharpenBtn">Sharpen</button>
+          <button id="embossBtn">Emboss</button>
+          <button id="noiseBtn">Add Noise</button>
+        </div>
+      </div>
+      <!-- AI Tools -->
+      <div class="tool-group">
+        <div class="group-header">AI Tools</div>
+        <div class="group-controls">
+          <button id="aiAutoEnhanceBtn">AI Auto Enhance</button>
+          <button id="aiRemoveNoiseBtn">AI Remove Noise</button>
+          <button id="aiStyleTransferBtn">AI Style Transfer</button>
+        </div>
+      </div>
+      <!-- Export -->
+      <div class="tool-group">
+        <div class="group-header">Export</div>
+        <div class="group-controls">
+          <button id="downloadBtn">Download</button>
+          <button id="aiRetouchBtn">AI Retouch</button>
+        </div>
+      </div>
+    </aside>
+    <main id="mainArea">
+      <div id="canvasContainer">
+        <canvas id="baseCanvas"></canvas>
+        <canvas id="overlayCanvas"></canvas>
+        <div id="cropOverlay"></div>
+      </div>
+    </main>
   </div>
-  <div id="canvasContainer">
-    <canvas id="editorCanvas"></canvas>
+  <!-- Modal for text input -->
+  <div id="textModal" class="modal">
+    <div class="modal-content">
+      <h3>Add Text</h3>
+      <input type="text" id="modalTextInput" placeholder="Enter your text" />
+      <button id="modalAddTextBtn">Add Text</button>
+    </div>
   </div>
-
   <script>
-    // Get canvas and context
-    const canvas = document.getElementById('editorCanvas');
-    const ctx = canvas.getContext('2d');
-    let originalImage = null;
-    let history = [];
+    window.onload = function() {
+      /*******************
+       * Editor State
+       *******************/
+      const editor = {
+        originalImage: null,
+        history: [],
+        redoHistory: [],
+        flipH: false,
+        flipV: false,
+        textElements: [],
+        shapes: [],
+        cropMode: false,
+        cropStart: null,
+        drawMode: false,
+        isDrawing: false,
+        lastDrawPos: { x: 0, y: 0 },
+        addingTextMode: false,
+        draggingText: null,
+        dragOffset: { x: 0, y: 0 },
+        textPosition: { x: 0, y: 0 },
+        // For shape drawing
+        currentTool: null, // "rectangle", "circle", "line"
+        isDrawingShape: false,
+        shapeStart: { x: 0, y: 0 }
+      };
 
-    // Resize canvas to match image dimensions
-    function resizeCanvas(width, height) {
-      canvas.width = width;
-      canvas.height = height;
-    }
+      /*******************
+       * Canvas Elements
+       *******************/
+      const baseCanvas = document.getElementById('baseCanvas');
+      const baseCtx = baseCanvas.getContext('2d');
+      const overlayCanvas = document.getElementById('overlayCanvas');
+      const overlayCtx = overlayCanvas.getContext('2d');
+      const cropOverlay = document.getElementById('cropOverlay');
+      const canvasContainer = document.getElementById('canvasContainer');
+      const textModal = document.getElementById('textModal');
+      const modalTextInput = document.getElementById('modalTextInput');
 
-    // Save the current canvas state for undo functionality
-    function saveState() {
-      history.push(canvas.toDataURL());
-      if (history.length > 10) { // limit history size
-        history.shift();
+      /*******************
+       * Utility Functions
+       *******************/
+      function resizeCanvases(width, height) {
+        baseCanvas.width = width;
+        baseCanvas.height = height;
+        overlayCanvas.width = width;
+        overlayCanvas.height = height;
+        baseCanvas.style.width = width + "px";
+        baseCanvas.style.height = height + "px";
+        overlayCanvas.style.width = width + "px";
+        overlayCanvas.style.height = height + "px";
+        canvasContainer.style.width = width + "px";
+        canvasContainer.style.height = height + "px";
       }
-    }
 
-    // Load image from file input
-    document.getElementById('upload').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = function(event) {
+      function redrawBase(img) {
+        baseCtx.clearRect(0, 0, baseCanvas.width, baseCanvas.height);
+        baseCtx.drawImage(img, 0, 0, baseCanvas.width, baseCanvas.height);
+      }
+
+      // Draw shapes first, then text
+      function redrawOverlay() {
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        editor.shapes.forEach(shape => {
+          overlayCtx.beginPath();
+          overlayCtx.strokeStyle = shape.strokeColor;
+          overlayCtx.lineWidth = shape.lineWidth;
+          if (shape.type === "rectangle") {
+            overlayCtx.rect(shape.x1, shape.y1, shape.x2 - shape.x1, shape.y2 - shape.y1);
+          } else if (shape.type === "circle") {
+            const dx = shape.x2 - shape.x1;
+            const dy = shape.y2 - shape.y1;
+            const radius = Math.sqrt(dx * dx + dy * dy);
+            overlayCtx.arc(shape.x1, shape.y1, radius, 0, 2 * Math.PI);
+          } else if (shape.type === "line") {
+            overlayCtx.moveTo(shape.x1, shape.y1);
+            overlayCtx.lineTo(shape.x2, shape.y2);
+          }
+          overlayCtx.stroke();
+        });
+        editor.textElements.forEach(el => {
+          overlayCtx.font = `${el.size}px ${el.font}`;
+          overlayCtx.fillStyle = el.color;
+          overlayCtx.fillText(el.text, el.x, el.y);
+        });
+      }
+
+      function saveState() {
+        editor.history.push(baseCanvas.toDataURL());
+        editor.redoHistory = [];
+        if (editor.history.length > 20) editor.history.shift();
+      }
+
+      /*******************
+       * Update Image Function (for adjustments/transform)
+       *******************/
+      function updateImage() {
+        if (!editor.originalImage) return;
+        const brightness = parseFloat(document.getElementById('brightnessSlider').value);
+        const contrast = parseFloat(document.getElementById('contrastSlider').value);
+        const saturate = parseFloat(document.getElementById('saturateSlider').value);
+        const blur = parseFloat(document.getElementById('blurSlider').value);
+        const hue = parseFloat(document.getElementById('hueSlider').value);
+        const rotation = parseFloat(document.getElementById('rotationSlider').value);
+        const filter = `brightness(${brightness}%) contrast(${contrast}%) saturate(${saturate}%) blur(${blur}px) hue-rotate(${hue}deg)`;
+
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = editor.originalImage.width;
+        offCanvas.height = editor.originalImage.height;
+        const offCtx = offCanvas.getContext('2d');
+        offCtx.filter = filter;
+        offCtx.drawImage(editor.originalImage, 0, 0);
+
+        const angle = rotation * Math.PI / 180;
+        const sin = Math.abs(Math.sin(angle));
+        const cos = Math.abs(Math.cos(angle));
+        const newWidth = offCanvas.width * cos + offCanvas.height * sin;
+        const newHeight = offCanvas.width * sin + offCanvas.height * cos;
+
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = newWidth;
+        finalCanvas.height = newHeight;
+        const finalCtx = finalCanvas.getContext('2d');
+        finalCtx.translate(newWidth / 2, newHeight / 2);
+        const scaleX = editor.flipH ? -1 : 1;
+        const scaleY = editor.flipV ? -1 : 1;
+        finalCtx.scale(scaleX, scaleY);
+        finalCtx.rotate(angle);
+        finalCtx.drawImage(offCanvas, -offCanvas.width / 2, -offCanvas.height / 2);
+
         const img = new Image();
         img.onload = function() {
-          resizeCanvas(img.width, img.height);
-          ctx.drawImage(img, 0, 0);
-          originalImage = img;
-          history = []; // clear any existing history
+          resizeCanvases(newWidth, newHeight);
+          redrawBase(img);
+          saveState();
+        };
+        img.src = finalCanvas.toDataURL();
+      }
+
+      /*******************
+       * Instant Slider Updates
+       *******************/
+      document.getElementById('brightnessSlider').addEventListener('input', updateImage);
+      document.getElementById('contrastSlider').addEventListener('input', updateImage);
+      document.getElementById('saturateSlider').addEventListener('input', updateImage);
+      document.getElementById('blurSlider').addEventListener('input', updateImage);
+      document.getElementById('hueSlider').addEventListener('input', updateImage);
+      document.getElementById('rotationSlider').addEventListener('input', updateImage);
+
+      /*******************
+       * File Operations
+       *******************/
+      document.getElementById('upload').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+          const img = new Image();
+          img.onload = function() {
+            editor.originalImage = img;
+            resizeCanvases(img.width, img.height);
+            redrawBase(img);
+            overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+            editor.textElements = [];
+            editor.shapes = [];
+            editor.flipH = false;
+            editor.flipV = false;
+            document.getElementById('rotationSlider').value = 0;
+            document.getElementById('brightnessSlider').value = 100;
+            document.getElementById('contrastSlider').value = 100;
+            document.getElementById('saturateSlider').value = 100;
+            document.getElementById('blurSlider').value = 0;
+            document.getElementById('hueSlider').value = 0;
+            saveState();
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      document.getElementById('resetBtn').addEventListener('click', function() {
+        if (editor.originalImage) {
+          resizeCanvases(editor.originalImage.width, editor.originalImage.height);
+          redrawBase(editor.originalImage);
+          overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+          editor.textElements = [];
+          editor.shapes = [];
+          editor.flipH = false;
+          editor.flipV = false;
+          document.getElementById('rotationSlider').value = 0;
+          document.getElementById('brightnessSlider').value = 100;
+          document.getElementById('contrastSlider').value = 100;
+          document.getElementById('saturateSlider').value = 100;
+          document.getElementById('blurSlider').value = 0;
+          document.getElementById('hueSlider').value = 0;
           saveState();
         }
-        img.src = event.target.result;
-      }
-      reader.readAsDataURL(file);
-    });
+      });
 
-    // Undo functionality: restore previous state
-    document.getElementById('undoBtn').addEventListener('click', function() {
-      if (history.length > 1) {
-        history.pop(); // remove current state
-        const previousState = history[history.length - 1];
+      /*******************
+       * Undo & Redo
+       *******************/
+      document.getElementById('undoBtn').addEventListener('click', function() {
+        if (editor.history.length > 1) {
+          const current = editor.history.pop();
+          editor.redoHistory.push(current);
+          const prev = editor.history[editor.history.length - 1];
+          const img = new Image();
+          img.onload = function() {
+            redrawBase(img);
+          };
+          img.src = prev;
+        }
+      });
+      document.getElementById('redoBtn').addEventListener('click', function() {
+        if (editor.redoHistory.length) {
+          const next = editor.redoHistory.pop();
+          const img = new Image();
+          img.onload = function() {
+            editor.history.push(next);
+            redrawBase(img);
+          };
+          img.src = next;
+        }
+      });
+
+      /*******************
+       * Transform Tools
+       *******************/
+      document.getElementById('rotateLeftBtn').addEventListener('click', function() {
+        const rotSlider = document.getElementById('rotationSlider');
+        rotSlider.value = parseFloat(rotSlider.value) - 90;
+        updateImage();
+      });
+      document.getElementById('rotateRightBtn').addEventListener('click', function() {
+        const rotSlider = document.getElementById('rotationSlider');
+        rotSlider.value = parseFloat(rotSlider.value) + 90;
+        updateImage();
+      });
+      document.getElementById('flipHBtn').addEventListener('click', function() {
+        editor.flipH = !editor.flipH;
+        updateImage();
+      });
+      document.getElementById('flipVBtn').addEventListener('click', function() {
+        editor.flipV = !editor.flipV;
+        updateImage();
+      });
+
+      /*******************
+       * Adjustments: Reset
+       *******************/
+      document.getElementById('resetAdjustmentsBtn').addEventListener('click', function() {
+        document.getElementById('brightnessSlider').value = 100;
+        document.getElementById('contrastSlider').value = 100;
+        document.getElementById('saturateSlider').value = 100;
+        document.getElementById('blurSlider').value = 0;
+        document.getElementById('hueSlider').value = 0;
+        updateImage();
+      });
+
+      /*******************
+       * Preset Filters
+       *******************/
+      function applyPreset(filterStr) {
+        if (!editor.originalImage) return;
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = baseCanvas.width;
+        offCanvas.height = baseCanvas.height;
+        const offCtx = offCanvas.getContext('2d');
+        offCtx.filter = filterStr;
+        offCtx.drawImage(baseCanvas, 0, 0);
         const img = new Image();
         img.onload = function() {
-          resizeCanvas(img.width, img.height);
-          ctx.drawImage(img, 0, 0);
+          redrawBase(img);
+          saveState();
+        };
+        img.src = offCanvas.toDataURL();
+      }
+      document.getElementById('grayscaleBtn').addEventListener('click', () => applyPreset('grayscale(100%)'));
+      document.getElementById('sepiaBtn').addEventListener('click', () => applyPreset('sepia(100%)'));
+      document.getElementById('invertBtn').addEventListener('click', () => applyPreset('invert(100%)'));
+      document.getElementById('blurFilterBtn').addEventListener('click', () => applyPreset('blur(5px)'));
+
+      /*******************
+       * Shapes Tools
+       *******************/
+      document.getElementById('rectangleBtn').addEventListener('click', function() {
+        editor.currentTool = "rectangle";
+        editor.drawMode = false;
+        editor.addingTextMode = false;
+        alert('Rectangle tool activated: Click and drag to draw a rectangle.');
+      });
+      document.getElementById('circleBtn').addEventListener('click', function() {
+        editor.currentTool = "circle";
+        editor.drawMode = false;
+        editor.addingTextMode = false;
+        alert('Circle tool activated: Click and drag to draw a circle.');
+      });
+      document.getElementById('lineBtn').addEventListener('click', function() {
+        editor.currentTool = "line";
+        editor.drawMode = false;
+        editor.addingTextMode = false;
+        alert('Line tool activated: Click and drag to draw a line.');
+      });
+      document.getElementById('clearShapesBtn').addEventListener('click', function() {
+        editor.shapes = [];
+        redrawOverlay();
+      });
+
+      /*******************
+       * Effects Tools
+       *******************/
+      function applyConvolution(kernel, divisor, offset) {
+        if (!editor.originalImage) return;
+        const width = baseCanvas.width;
+        const height = baseCanvas.height;
+        const imageData = baseCtx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        const tempData = new Uint8ClampedArray(data);
+        const side = Math.round(Math.sqrt(kernel.length));
+        const halfSide = Math.floor(side / 2);
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            let r = 0, g = 0, b = 0;
+            for (let ky = 0; ky < side; ky++) {
+              for (let kx = 0; kx < side; kx++) {
+                const posX = x + kx - halfSide;
+                const posY = y + ky - halfSide;
+                if (posX >= 0 && posX < width && posY >= 0 && posY < height) {
+                  const offsetIndex = (posY * width + posX) * 4;
+                  const wt = kernel[ky * side + kx];
+                  r += tempData[offsetIndex] * wt;
+                  g += tempData[offsetIndex + 1] * wt;
+                  b += tempData[offsetIndex + 2] * wt;
+                }
+              }
+            }
+            const idx = (y * width + x) * 4;
+            data[idx] = Math.min(Math.max((r / divisor) + offset, 0), 255);
+            data[idx + 1] = Math.min(Math.max((g / divisor) + offset, 0), 255);
+            data[idx + 2] = Math.min(Math.max((b / divisor) + offset, 0), 255);
+          }
         }
-        img.src = previousState;
-      }
-    });
-
-    // Reset to the original image
-    document.getElementById('resetBtn').addEventListener('click', function() {
-      if (originalImage) {
-        resizeCanvas(originalImage.width, originalImage.height);
-        ctx.drawImage(originalImage, 0, 0);
-        history = [];
+        baseCtx.putImageData(imageData, 0, 0);
         saveState();
       }
-    });
+      document.getElementById('sharpenBtn').addEventListener('click', function() {
+        const kernel = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+        applyConvolution(kernel, 1, 0);
+      });
+      document.getElementById('embossBtn').addEventListener('click', function() {
+        const kernel = [-2, -1, 0, -1, 1, 1, 0, 1, 2];
+        applyConvolution(kernel, 1, 128);
+      });
+      document.getElementById('noiseBtn').addEventListener('click', function() {
+        if (!editor.originalImage) return;
+        const width = baseCanvas.width;
+        const height = baseCanvas.height;
+        const imageData = baseCtx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        for (let i = 0; i < data.length; i += 4) {
+          const noise = (Math.random() - 0.5) * 50;
+          data[i] = Math.min(Math.max(data[i] + noise, 0), 255);
+          data[i+1] = Math.min(Math.max(data[i+1] + noise, 0), 255);
+          data[i+2] = Math.min(Math.max(data[i+2] + noise, 0), 255);
+        }
+        baseCtx.putImageData(imageData, 0, 0);
+        saveState();
+      });
 
-    // Apply a filter to the current canvas image
-    function applyFilter(filter) {
-      const currentData = canvas.toDataURL();
-      const img = new Image();
-      img.onload = function() {
-        // Create an offscreen canvas to apply filter
-        const offCanvas = document.createElement('canvas');
-        const offCtx = offCanvas.getContext('2d');
-        offCanvas.width = canvas.width;
-        offCanvas.height = canvas.height;
-        offCtx.filter = filter;
-        offCtx.drawImage(img, 0, 0);
-        // Draw the filtered image back to the main canvas
-        ctx.drawImage(offCanvas, 0, 0);
+      /*******************
+       * AI Tools
+       *******************/
+      // AI Auto Enhance: Simple histogram stretch per channel
+      function aiAutoEnhance() {
+        if (!editor.originalImage) return;
+        const width = baseCanvas.width;
+        const height = baseCanvas.height;
+        const imageData = baseCtx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        let rMin = 255, rMax = 0, gMin = 255, gMax = 0, bMin = 255, bMax = 0;
+        for (let i = 0; i < data.length; i += 4) {
+          rMin = Math.min(rMin, data[i]);
+          rMax = Math.max(rMax, data[i]);
+          gMin = Math.min(gMin, data[i+1]);
+          gMax = Math.max(gMax, data[i+1]);
+          bMin = Math.min(bMin, data[i+2]);
+          bMax = Math.max(bMax, data[i+2]);
+        }
+        for (let i = 0; i < data.length; i += 4) {
+          data[i] = ((data[i] - rMin) * 255) / (rMax - rMin);
+          data[i+1] = ((data[i+1] - gMin) * 255) / (gMax - gMin);
+          data[i+2] = ((data[i+2] - bMin) * 255) / (bMax - bMin);
+        }
+        baseCtx.putImageData(imageData, 0, 0);
         saveState();
       }
-      img.src = currentData;
-    }
+      document.getElementById('aiAutoEnhanceBtn').addEventListener('click', aiAutoEnhance);
+      // Placeholder for AI Remove Noise
+      document.getElementById('aiRemoveNoiseBtn').addEventListener('click', function() {
+        alert('AI Remove Noise is under development.');
+      });
+      // Placeholder for AI Style Transfer
+      document.getElementById('aiStyleTransferBtn').addEventListener('click', function() {
+        alert('AI Style Transfer is under development.');
+      });
 
-    // Basic filter button event listeners
-    document.getElementById('grayscaleBtn').addEventListener('click', function() {
-      applyFilter('grayscale(100%)');
-    });
-    document.getElementById('brightnessBtn').addEventListener('click', function() {
-      applyFilter('brightness(120%)');
-    });
-    document.getElementById('contrastBtn').addEventListener('click', function() {
-      applyFilter('contrast(120%)');
-    });
+      /*******************
+       * OverlayCanvas Events (Drawing, Shapes, Crop, Drag, Text)
+       *******************/
+      overlayCanvas.style.pointerEvents = "auto";
+      baseCanvas.style.pointerEvents = "none";
+      overlayCanvas.addEventListener('mousedown', function(e) {
+        const rect = overlayCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        if (editor.currentTool) {
+          // Start shape drawing
+          editor.isDrawingShape = true;
+          editor.shapeStart = { x, y };
+        } else if (editor.cropMode) {
+          editor.cropStart = { x, y };
+          cropOverlay.style.left = x + "px";
+          cropOverlay.style.top = y + "px";
+          cropOverlay.style.width = "0px";
+          cropOverlay.style.height = "0px";
+          cropOverlay.style.display = "block";
+        } else if (editor.addingTextMode) {
+          editor.textPosition = { x, y };
+          modalTextInput.value = "";
+          textModal.style.display = "flex";
+        } else if (editor.drawMode) {
+          editor.isDrawing = true;
+          editor.lastDrawPos = { x, y };
+        } else {
+          // Check if clicking on text for dragging
+          for (let i = editor.textElements.length - 1; i >= 0; i--) {
+            const el = editor.textElements[i];
+            overlayCtx.font = `${el.size}px ${el.font}`;
+            const textWidth = overlayCtx.measureText(el.text).width;
+            const textHeight = el.size;
+            if (x >= el.x && x <= el.x + textWidth && y <= el.y && y >= el.y - textHeight) {
+              editor.draggingText = el;
+              editor.dragOffset = { x: x - el.x, y: y - el.y };
+              break;
+            }
+          }
+        }
+      });
+      overlayCanvas.addEventListener('mousemove', function(e) {
+        const rect = overlayCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        if (editor.isDrawingShape) {
+          overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+          redrawOverlay();
+          overlayCtx.beginPath();
+          if (editor.currentTool === "rectangle") {
+            overlayCtx.rect(editor.shapeStart.x, editor.shapeStart.y, x - editor.shapeStart.x, y - editor.shapeStart.y);
+          } else if (editor.currentTool === "circle") {
+            const dx = x - editor.shapeStart.x;
+            const dy = y - editor.shapeStart.y;
+            const radius = Math.sqrt(dx * dx + dy * dy);
+            overlayCtx.arc(editor.shapeStart.x, editor.shapeStart.y, radius, 0, 2 * Math.PI);
+          } else if (editor.currentTool === "line") {
+            overlayCtx.moveTo(editor.shapeStart.x, editor.shapeStart.y);
+            overlayCtx.lineTo(x, y);
+          }
+          overlayCtx.strokeStyle = document.getElementById('drawColor').value;
+          overlayCtx.lineWidth = document.getElementById('brushSize').value;
+          overlayCtx.stroke();
+        } else if (editor.cropMode && editor.cropStart) {
+          const width = x - editor.cropStart.x;
+          const height = y - editor.cropStart.y;
+          cropOverlay.style.width = Math.abs(width) + "px";
+          cropOverlay.style.height = Math.abs(height) + "px";
+          cropOverlay.style.left = (width < 0 ? x : editor.cropStart.x) + "px";
+          cropOverlay.style.top = (height < 0 ? y : editor.cropStart.y) + "px";
+        } else if (editor.drawMode && editor.isDrawing) {
+          overlayCtx.beginPath();
+          overlayCtx.moveTo(editor.lastDrawPos.x, editor.lastDrawPos.y);
+          overlayCtx.lineTo(x, y);
+          overlayCtx.strokeStyle = document.getElementById('drawColor').value;
+          overlayCtx.lineWidth = document.getElementById('brushSize').value;
+          overlayCtx.lineCap = "round";
+          overlayCtx.stroke();
+          editor.lastDrawPos = { x, y };
+        } else if (editor.draggingText) {
+          editor.draggingText.x = x - editor.dragOffset.x;
+          editor.draggingText.y = y - editor.dragOffset.y;
+          redrawOverlay();
+        }
+      });
+      overlayCanvas.addEventListener('mouseup', function(e) {
+        const rect = overlayCanvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        if (editor.isDrawingShape) {
+          const shape = {
+            type: editor.currentTool,
+            x1: editor.shapeStart.x,
+            y1: editor.shapeStart.y,
+            x2: x,
+            y2: y,
+            strokeColor: document.getElementById('drawColor').value,
+            lineWidth: document.getElementById('brushSize').value
+          };
+          editor.shapes.push(shape);
+          editor.isDrawingShape = false;
+          editor.currentTool = null;
+          redrawOverlay();
+          return;
+        }
+        if (editor.cropMode && editor.cropStart) {
+          const startX = editor.cropStart.x;
+          const startY = editor.cropStart.y;
+          const cropX = Math.min(startX, x);
+          const cropY = Math.min(startY, y);
+          const cropW = Math.abs(x - startX);
+          const cropH = Math.abs(y - startY);
+          if (cropW && cropH) {
+            const croppedData = baseCtx.getImageData(cropX, cropY, cropW, cropH);
+            resizeCanvases(cropW, cropH);
+            baseCtx.putImageData(croppedData, 0, 0);
+            const tempImg = new Image();
+            tempImg.onload = function() {
+              editor.originalImage = tempImg;
+              saveState();
+            };
+            tempImg.src = baseCanvas.toDataURL();
+          }
+          cropOverlay.style.display = "none";
+          editor.cropStart = null;
+          editor.cropMode = false;
+        }
+        if (editor.drawMode && editor.isDrawing) {
+          editor.isDrawing = false;
+        }
+        if (editor.draggingText) {
+          editor.draggingText = null;
+        }
+      });
 
-    // Placeholder for future AI retouch functionality (e.g., TensorFlow.js integration)
-    document.getElementById('aiRetouchBtn').addEventListener('click', function() {
-      alert('AI Retouch is under development.');
-    });
+      /*******************
+       * Text Modal Handling
+       *******************/
+      document.getElementById('modalAddTextBtn').addEventListener('click', function() {
+        const text = modalTextInput.value.trim();
+        if (text !== "") {
+          const font = "Arial";
+          const size = 30;
+          const color = "#ffffff";
+          const pos = editor.textPosition;
+          editor.textElements.push({ text, x: pos.x, y: pos.y, font, size, color });
+          redrawOverlay();
+        }
+        textModal.style.display = "none";
+        editor.addingTextMode = false;
+      });
+      textModal.addEventListener('click', function(e) {
+        if (e.target === textModal) {
+          textModal.style.display = "none";
+          editor.addingTextMode = false;
+        }
+      });
+      document.getElementById('addTextModeBtn').addEventListener('click', function() {
+        editor.addingTextMode = true;
+        alert('Text mode activated: Click on the image to add text.');
+      });
+
+      /*******************
+       * Drawing Mode Toggle
+       *******************/
+      document.getElementById('toggleDrawBtn').addEventListener('click', function() {
+        editor.drawMode = !editor.drawMode;
+        overlayCanvas.style.pointerEvents = editor.drawMode ? "auto" : "none";
+        if (editor.drawMode) {
+          alert('Drawing mode activated: Draw on the image.');
+        }
+      });
+      document.getElementById('clearOverlayBtn').addEventListener('click', function() {
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+        editor.textElements = [];
+      });
+
+      /*******************
+       * Export Tools
+       *******************/
+      document.getElementById('downloadBtn').addEventListener('click', function() {
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = baseCanvas.width;
+        finalCanvas.height = baseCanvas.height;
+        const finalCtx = finalCanvas.getContext('2d');
+        finalCtx.drawImage(baseCanvas, 0, 0);
+        finalCtx.drawImage(overlayCanvas, 0, 0);
+        const link = document.createElement('a');
+        link.download = 'edited_image.png';
+        link.href = finalCanvas.toDataURL();
+        link.click();
+      });
+      document.getElementById('aiRetouchBtn').addEventListener('click', function() {
+        alert('AI Retouch is under development.');
+      });
+
+      /*******************
+       * Collapsible Sidebar Groups
+       *******************/
+      document.querySelectorAll('.group-header').forEach(header => {
+        header.addEventListener('click', () => {
+          const controls = header.nextElementSibling;
+          controls.style.display = controls.style.display === "flex" ? "none" : "flex";
+        });
+      });
+
+      /*******************
+       * Keyboard Shortcuts
+       *******************/
+      document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.key === 'z') {
+          document.getElementById('undoBtn').click();
+        } else if (e.ctrlKey && e.key === 'y') {
+          document.getElementById('redoBtn').click();
+        }
+      });
+    }; // end window.onload
   </script>
 </body>
 </html>
